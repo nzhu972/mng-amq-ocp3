@@ -1,0 +1,249 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+labels:
+  template: amq-broker-76-persistence
+  xpaas: 1.4.16
+message: A new messaging service has been created in your project. It will handle
+  the protocol(s) "${AMQ_PROTOCOL}". The username/password for accessing the service
+  is ${AMQ_USER}/${AMQ_PASSWORD}.
+metadata:
+  annotations:
+    description: Application template for Red Hat AMQ brokers. This template doesn't
+      feature SSL support.
+    iconClass: icon-amq
+    openshift.io/display-name: Red Hat AMQ Broker 7.6 (Persistence, no SSL)
+    openshift.io/provider-display-name: Red Hat, Inc.
+    tags: messaging,amq,xpaas
+    template.openshift.io/documentation-url: https://access.redhat.com/documentation/en/red-hat-amq/
+    template.openshift.io/long-description: This template defines resources needed
+      to develop a Red Hat AMQ Broker 7.6 based application, including a statefulset
+      configuration, using persistent storage.
+    template.openshift.io/support-url: https://access.redhat.com
+    version: 1.4.16
+objects:
+- apiVersion: v1
+  data:
+    ${AMQ_PASSWORD}: YWRtaW4=
+    ${AMQ_USER}: YWRtaW4=
+  kind: Secret
+  metadata:
+    annotations:
+      description: Credentials used in broker config. Default values are admin(AMQ_USER
+        and AMQ_PASSWORD).
+    name: amq-credential-secret
+  type: Opaque
+- apiVersion: apps/v1beta1
+  kind: StatefulSet
+  metadata:
+    labels:
+      app: ${SERVICE}
+      application: ${SERVICE}
+    name: ${SERVICE}-amq
+  spec:
+    podManagementPolicy: OrderedReady
+    selector:
+      matchLabels:
+        app: ${SERVICE}
+        application: ${SERVICE}
+    serviceName: ${AMQ_NAME}-amq-headless
+    strategy:
+      rollingParams:
+        maxSurge: 0
+      type: Rolling
+    template:
+      metadata:
+        labels:
+          app: ${SERVICE}
+          application: ${SERVICE}
+          deploymentConfig: ${SERVICE}-amq
+        name: ${SERVICE}-amq
+      spec:
+        containers:
+        - env:
+          - name: NAMESPACE
+            value: ${NAMESPACE}
+          - name: AMQ_USER
+            valueFrom:
+              secretKeyRef:
+                key: ${AMQ_USER}
+                name: ${AMQ_CREDENTIAL_SECRET}
+          - name: AMQ_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                key: ${AMQ_PASSWORD}
+                name: ${AMQ_CREDENTIAL_SECRET}
+          - name: AMQ_ROLE
+            value: ${AMQ_ROLE}
+          - name: AMQ_NAME
+            value: ${AMQ_NAME}
+          - name: AMQ_TRANSPORTS
+            value: ${AMQ_PROTOCOL}
+          - name: AMQ_QUEUES
+            value: ${AMQ_QUEUES}
+          - name: AMQ_ADDRESSES
+            value: ${AMQ_ADDRESSES}
+          - name: AMQ_GLOBAL_MAX_SIZE
+            value: ${AMQ_GLOBAL_MAX_SIZE}
+          - name: AMQ_REQUIRE_LOGIN
+            value: ${AMQ_REQUIRE_LOGIN}
+          - name: AMQ_DATA_DIR
+            value: ${AMQ_DATA_DIR}
+          - name: AMQ_DATA_DIR_LOGGING
+            value: ${AMQ_DATA_DIR_LOGGING}
+          - name: AMQ_EXTRA_ARGS
+            value: ${AMQ_EXTRA_ARGS}
+          - name: AMQ_ANYCAST_PREFIX
+            value: ${AMQ_ANYCAST_PREFIX}
+          - name: AMQ_MULTICAST_PREFIX
+            value: ${AMQ_MULTICAST_PREFIX}
+          - name: AMQ_ENABLE_METRICS_PLUGIN
+            value: ${AMQ_ENABLE_METRICS_PLUGIN}
+          - name: AMQ_JOURNAL_TYPE
+            value: ${AMQ_JOURNAL_TYPE}
+          image: ${DOCKER_REPO_URL}/${IMAGE_NAMESPACE}/${SERVICE}:${IMAGE_VERSION}
+          name: ${SERVICE}-amq
+          ports:
+          - containerPort: 8161
+            name: console-jolokia
+            protocol: TCP
+          - containerPort: 5672
+            name: amqp
+            protocol: TCP
+          - containerPort: 1883
+            name: mqtt
+            protocol: TCP
+          - containerPort: 61613
+            name: stomp
+            protocol: TCP
+          - containerPort: 61616
+            name: all
+            protocol: TCP
+          readinessProbe:
+            exec:
+              command:
+              - /bin/bash
+              - -c
+              - /opt/amq/bin/readinessProbe.sh
+          volumeMounts:
+          - mountPath: ${AMQ_DATA_DIR}
+            name: ${SERVICE}-amq-pvol
+        terminationGracePeriodSeconds: 60
+        imagePullSecrets:
+        - name: artifactory
+    triggers:
+    - type: ConfigChange
+    volumeClaimTemplates:
+    - apiVersion: v1
+      kind: PersistentVolumeClaim
+      metadata:
+        name: ${SERVICE}-amq-pvol
+      spec:
+        accessModes:
+        - ReadWriteOnce
+        resources:
+          requests:
+            storage: ${VOLUME_CAPACITY}
+parameters:
+- description: 'Protocols to configure, separated by commas. Allowed values are: `openwire`,
+    `amqp`, `stomp`, `mqtt` and `hornetq`.'
+  displayName: AMQ Protocols
+  name: AMQ_PROTOCOL
+  value: openwire,amqp,stomp,mqtt,hornetq
+- description: Queue names, separated by commas. These queues will be automatically
+    created when the broker starts. If left empty, queues will be still created dynamically.
+  displayName: Queues
+  name: AMQ_QUEUES
+  value: demoQueue
+- description: Address names, separated by commas. These addresses will be automatically
+    created when the broker starts. If left empty, addresses will be still created
+    dynamically.
+  displayName: Addresses
+  name: AMQ_ADDRESSES
+  value: demoTopic
+- description: Size of the volume used by AMQ for persisting messages.
+  displayName: AMQ Volume Size
+  name: VOLUME_CAPACITY
+  required: true
+  value: 1Gi
+- description: User name for standard broker user. It is required for connecting to
+    the broker. If left empty, it will be generated. It serves as a key by which the
+    real user name is retrieved from kubernetes secret object.
+  displayName: AMQ Username
+  from: user[a-zA-Z0-9]{3}
+  generate: expression
+  name: AMQ_USER
+  value: admin
+- description: Password for standard broker user. It is required for connecting to
+    the broker. If left empty, it will be generated. It serves as a key by which the
+    real password is retrieved from kubernetes secret object.
+  displayName: AMQ Password
+  from: '[a-zA-Z0-9]{8}'
+  generate: expression
+  name: AMQ_PASSWORD
+  value: admin
+- description: User role for standard broker user.
+  displayName: AMQ Role
+  name: AMQ_ROLE
+  value: admin
+- description: The name of the broker
+  displayName: AMQ Name
+  name: AMQ_NAME
+  value: broker
+- description: The directory to use for data storage
+  displayName: AMQ Data Directory
+  name: AMQ_DATA_DIR
+  value: /opt/amq/data
+- description: Use the AMQ Data Directory for logging
+  displayName: AMQ Data Directory for logging
+  name: AMQ_DATA_DIR_LOGGING
+  value: "true"
+- description: 'Maximum amount of memory which message data may consume (Default:
+    Undefined, half of the system''s memory).'
+  displayName: AMQ Global Max Size
+  name: AMQ_GLOBAL_MAX_SIZE
+  value: 100 gb
+- description: Determines whether or not the broker will allow anonymous access, or
+    require login.
+  displayName: AMQ Require Login
+  name: AMQ_REQUIRE_LOGIN
+- description: Extra arguments for broker creation
+  name: AMQ_EXTRA_ARGS
+- description: Anycast prefix applied to the multiplexed protocol port 61616
+  displayName: AMQ Anycast Prefix
+  name: AMQ_ANYCAST_PREFIX
+- description: Multicast prefix applied to the multiplexed protocol port 61616
+  displayName: AMQ Multicast Prefix
+  name: AMQ_MULTICAST_PREFIX
+- description: Name of a secret containing credential data such as usernames and passwords
+  displayName: Secret Name
+  name: AMQ_CREDENTIAL_SECRET
+  required: true
+  value: amq-credential-secret
+- description: Whether to enable artemis metrics plugin
+  displayName: Enable Metrics Plugin
+  name: AMQ_ENABLE_METRICS_PLUGIN
+  value: "false"
+- description: Journal type to use; aio or nio supported
+  displayName: AMQ Journal Type
+  name: AMQ_JOURNAL_TYPE
+  value: nio
+- name: NAMESPACE
+  displayName: Openshift namespace (project)
+  description: Openshift namespace (project) this application resides in
+  required: true
+- name: IMAGE_NAMESPACE
+  displayName: Docker image namespace
+  description: The docker namespace that the image belongs to
+  required: true
+- name: IMAGE_VERSION
+  displayName: Image Version
+  description: Docker image version
+  required: true
+- name: DOCKER_REPO_URL
+  displayName: Docker Repo URL
+  description: Docker repository URL
+  required: true
+- name: SERVICE
+  displayName: Service Name
+  description: Service Name
+  required: true

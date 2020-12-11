@@ -1,0 +1,6 @@
+#FROM docker.artifactory.apps.ecicd.dso.ncps.us-cert.gov/amq7/amq-broker:7.7
+FROM docker.artifactory.apps.mng-staging.dso.ncps.us-cert.gov/amq7/amq-broker:7.7
+RUN curl -k -ucloudbees:AP6odshz4U5o6aD4pViKq9vsvReUHVPDSuamfb -o /opt/amq/web/console.war 'https://artifactory.apps.ecicd.dso.ncps.us-cert.gov/artifactory/generic-local/console.war'
+RUN chown jboss:root /opt/amq/web/console.war
+RUN chmod 664 /opt/amq/web/console.war
+ENV AMQ_CLUSTER_PASSWORD=

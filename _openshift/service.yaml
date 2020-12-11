@@ -1,0 +1,51 @@
+---
+apiVersion: v1
+kind: Template
+metadata:
+  name: service-template
+objects:
+- apiVersion: v1
+  kind: Service
+  metadata:
+    annotations:
+      description: The broker's headless, non load balanced service
+    labels:
+      app: ${SERVICE}
+      application: ${SERVICE}
+    name: ${AMQ_NAME}-amq-headless
+  spec:
+    clusterIP: None
+    ports:
+    - name: all
+      port: 61616
+      protocol: TCP
+      targetPort: 61616
+    - name: console-jolokia
+      port: 8161
+      protocol: TCP
+      targetPort: 8161
+    - name: amqp
+      port: 5672
+      protocol: TCP
+      targetPort: 5672
+    - name: mqtt
+      port: 1883
+      protocol: TCP
+      targetPort: 1883
+    - name: stomp
+      port: 61613
+      protocol: TCP
+      targetPort: 61613
+    publishNotReadyAddresses: true
+    selector:
+      deploymentConfig: ${SERVICE}-amq
+    type: ClusterIP    
+parameters:
+  - name: SERVICE
+    displayName: Service Name
+    description: Service Name
+    required: true
+  - description: The name of the broker
+    displayName: AMQ Name
+    name: AMQ_NAME
+    value: broker

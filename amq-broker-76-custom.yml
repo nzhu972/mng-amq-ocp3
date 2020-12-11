@@ -1,0 +1,416 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+labels:
+  template: amq-broker-76-custom
+  xpaas: 1.4.16
+message: A new messaging service has been created in your project. It will handle
+  the protocol(s) "${AMQ_PROTOCOL}". The username/password for accessing the service
+  is ${AMQ_USER}/${AMQ_PASSWORD}.
+metadata:
+  annotations:
+    description: Application template for Red Hat AMQ brokers. This template doesn't
+      feature SSL support.
+    iconClass: icon-amq
+    openshift.io/display-name: Red Hat AMQ Broker 7.6 Custom Config (Ephemeral, no
+      SSL)
+    openshift.io/provider-display-name: Red Hat, Inc.
+    tags: messaging,amq,xpaas
+    template.openshift.io/documentation-url: https://access.redhat.com/documentation/en/red-hat-amq/
+    template.openshift.io/long-description: This template defines resources needed
+      to develop a Red Hat AMQ Broker 7.6 based application, including a deployment
+      configuration, using ephemeral (temporary) storage.
+    template.openshift.io/support-url: https://access.redhat.com
+    version: 1.4.16
+  creationTimestamp: 2020-05-13T13:13:16Z
+  name: amq-broker-76-custom
+  namespace: malware-nextgen-lcurry-staging
+  resourceVersion: "8137379"
+  selfLink: /apis/template.openshift.io/v1/namespaces/malware-nextgen-lcurry-staging/templates/amq-broker-76-custom
+  uid: 81ef3c2e-951b-11ea-8c7f-06b72e7a2edc
+objects:
+- apiVersion: v1
+  data:
+    ${AMQ_PASSWORD}: YWRtaW4=
+    ${AMQ_USER}: YWRtaW4=
+  kind: Secret
+  metadata:
+    annotations:
+      description: Credentials used in broker config. Default values are admin(AMQ_USER
+        and AMQ_PASSWORD).
+    name: amq-credential-secret
+  type: Opaque
+- apiVersion: v1
+  kind: Service
+  metadata:
+    annotations:
+      description: The broker's console Jolokia port.
+    labels:
+      application: ${APPLICATION_NAME}
+    name: ${AMQ_NAME}-amq-jolokia
+  spec:
+    ports:
+    - port: 8161
+      targetPort: 8161
+    selector:
+      deploymentConfig: ${APPLICATION_NAME}-amq
+- apiVersion: v1
+  kind: Service
+  metadata:
+    annotations:
+      description: The broker's AMQP port.
+    labels:
+      application: ${APPLICATION_NAME}
+    name: ${AMQ_NAME}-amq-amqp
+  spec:
+    ports:
+    - port: 5672
+      targetPort: 5672
+    selector:
+      deploymentConfig: ${APPLICATION_NAME}-amq
+- apiVersion: v1
+  kind: Service
+  metadata:
+    annotations:
+      description: The broker's MQTT port.
+    labels:
+      application: ${APPLICATION_NAME}
+    name: ${AMQ_NAME}-amq-mqtt
+  spec:
+    ports:
+    - port: 1883
+      targetPort: 1883
+    selector:
+      deploymentConfig: ${APPLICATION_NAME}-amq
+- apiVersion: v1
+  kind: Service
+  metadata:
+    annotations:
+      description: The broker's STOMP port.
+    labels:
+      application: ${APPLICATION_NAME}
+    name: ${AMQ_NAME}-amq-stomp
+  spec:
+    ports:
+    - port: 61613
+      targetPort: 61613
+    selector:
+      deploymentConfig: ${APPLICATION_NAME}-amq
+- apiVersion: v1
+  kind: Service
+  metadata:
+    annotations:
+      description: The broker's OpenWire port.
+      service.alpha.openshift.io/dependencies: '[{"name": "${AMQ_NAME}-amq-amqp",
+        "kind": "Service"},{"name": "${AMQ_NAME}-amq-mqtt", "kind": "Service"},{"name":
+        "${AMQ_NAME}-amq-stomp", "kind": "Service"}]'
+    labels:
+      application: ${APPLICATION_NAME}
+    name: ${AMQ_NAME}-amq-tcp
+  spec:
+    ports:
+    - port: 61616
+      targetPort: 61616
+    selector:
+      deploymentConfig: ${APPLICATION_NAME}-amq
+- apiVersion: v1
+  kind: DeploymentConfig
+  metadata:
+    labels:
+      application: ${APPLICATION_NAME}
+    name: ${APPLICATION_NAME}-amq
+  spec:
+    replicas: 1
+    selector:
+      deploymentConfig: ${APPLICATION_NAME}-amq
+    strategy:
+      rollingParams:
+        maxSurge: 0
+      type: Rolling
+    template:
+      metadata:
+        labels:
+          application: ${APPLICATION_NAME}
+          deploymentConfig: ${APPLICATION_NAME}-amq
+        name: ${APPLICATION_NAME}-amq
+      spec:
+        containers:
+        - env:
+          - name: AMQ_USER
+            valueFrom:
+              secretKeyRef:
+                key: ${AMQ_USER}
+                name: ${AMQ_CREDENTIAL_SECRET}
+          - name: AMQ_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                key: ${AMQ_PASSWORD}
+                name: ${AMQ_CREDENTIAL_SECRET}
+          - name: AMQ_ROLE
+            value: ${AMQ_ROLE}
+          - name: AMQ_NAME
+            value: ${AMQ_NAME}
+          - name: AMQ_TRANSPORTS
+            value: ${AMQ_PROTOCOL}
+          - name: AMQ_QUEUES
+            value: ${AMQ_QUEUES}
+          - name: AMQ_ADDRESSES
+            value: ${AMQ_ADDRESSES}
+          - name: AMQ_GLOBAL_MAX_SIZE
+            value: ${AMQ_GLOBAL_MAX_SIZE}
+          - name: AMQ_REQUIRE_LOGIN
+            value: ${AMQ_REQUIRE_LOGIN}
+          - name: BROKER_XML
+            value: ${BROKER_XML}
+          - name: LOGGING_PROPERTIES
+            value: ${LOGGING_PROPERTIES}
+          - name: AMQ_EXTRA_ARGS
+            value: ${AMQ_EXTRA_ARGS}
+          - name: AMQ_ANYCAST_PREFIX
+            value: ${AMQ_ANYCAST_PREFIX}
+          - name: AMQ_MULTICAST_PREFIX
+            value: ${AMQ_MULTICAST_PREFIX}
+          - name: AMQ_JOURNAL_TYPE
+            value: ${AMQ_JOURNAL_TYPE}
+          image: ${IMAGE}
+          imagePullPolicy: Always
+          name: ${APPLICATION_NAME}-amq
+          ports:
+          - containerPort: 8161
+            name: console-jolokia
+            protocol: TCP
+          - containerPort: 5672
+            name: amqp
+            protocol: TCP
+          - containerPort: 1883
+            name: mqtt
+            protocol: TCP
+          - containerPort: 61613
+            name: stomp
+            protocol: TCP
+          - containerPort: 61616
+            name: artemis
+            protocol: TCP
+          readinessProbe:
+            exec:
+              command:
+              - /bin/bash
+              - -c
+              - /opt/amq/bin/readinessProbe.sh
+        terminationGracePeriodSeconds: 60
+    triggers:
+    - type: ConfigChange
+- apiVersion: v1
+  kind: Route
+  metadata:
+    labels:
+      application: ${APPLICATION_NAME}
+    name: console
+  spec:
+    to:
+      kind: Service
+      name: ${AMQ_NAME}-amq-jolokia
+parameters:
+- description: The name for the application.
+  displayName: Application Name
+  name: APPLICATION_NAME
+  required: true
+  value: broker
+- description: 'Protocols to configure, separated by commas. Allowed values are: `openwire`,
+    `amqp`, `stomp`, `mqtt` and `hornetq`.'
+  displayName: AMQ Protocols
+  name: AMQ_PROTOCOL
+  value: openwire,amqp,stomp,mqtt,hornetq
+- description: Queue names, separated by commas. These queues will be automatically
+    created when the broker starts. If left empty, queues will be still created dynamically.
+  displayName: Queues
+  name: AMQ_QUEUES
+- description: Address names, separated by commas. These addresses will be automatically
+    created when the broker starts. If left empty, addresses will be still created
+    dynamically.
+  displayName: Addresses
+  name: AMQ_ADDRESSES
+- description: User name for standard broker user. It is required for connecting to
+    the broker. If left empty, it will be generated. It serves as a key by which the
+    real user name is retrieved from kubernetes secret object.
+  displayName: AMQ Username
+  from: user[a-zA-Z0-9]{3}
+  generate: expression
+  name: AMQ_USER
+- description: Password for standard broker user. It is required for connecting to
+    the broker. If left empty, it will be generated. It serves as a key by which the
+    real password is retrieved from kubernetes secret object.
+  displayName: AMQ Password
+  from: '[a-zA-Z0-9]{8}'
+  generate: expression
+  name: AMQ_PASSWORD
+- description: User role for standard broker user.
+  displayName: AMQ Role
+  name: AMQ_ROLE
+  value: admin
+- description: The name of the broker
+  displayName: AMQ Name
+  name: AMQ_NAME
+  value: broker
+- description: 'Maximum amount of memory which message data may consume (Default:
+    Undefined, half of the system''s memory).'
+  displayName: AMQ Global Max Size
+  name: AMQ_GLOBAL_MAX_SIZE
+  value: 100 gb
+- description: Determines whether or not the broker will allow anonymous access, or
+    require login.
+  displayName: AMQ Require Login
+  name: AMQ_REQUIRE_LOGIN
+- description: Extra arguments for broker creation
+  name: AMQ_EXTRA_ARGS
+- description: Anycast prefix applied to the multiplexed protocol port 61616
+  displayName: AMQ Anycast Prefix
+  name: AMQ_ANYCAST_PREFIX
+- description: Multicast prefix applied to the multiplexed protocol port 61616
+  displayName: AMQ Multicast Prefix
+  name: AMQ_MULTICAST_PREFIX
+- description: Namespace in which the ImageStreams for Red Hat Middleware images are
+    installed. These ImageStreams are normally installed in the openshift namespace.
+    You should only need to modify this if you've installed the ImageStreams in a
+    different namespace/project.
+  displayName: ImageStream Namespace
+  name: IMAGE_STREAM_NAMESPACE
+  required: true
+  value: openshift
+- description: Broker Image
+  displayName: Image
+  name: IMAGE
+  required: true
+  value: registry.redhat.io/amq7/amq-broker:7.6
+- description: Name of a secret containing credential data such as usernames and passwords
+  displayName: Secret Name
+  name: AMQ_CREDENTIAL_SECRET
+  required: true
+  value: amq-credential-secret
+- description: Journal type to use; aio or nio supported
+  displayName: AMQ Journal Type
+  name: AMQ_JOURNAL_TYPE
+  value: nio
+- description: The broker.xml configuration file.
+  displayName: broker.xml
+  name: BROKER_XML
+  value: "<!-- Remove this tag to enable custom configuration --> \n<?xml version='1.0'?>\n<!--\nLicensed
+    to the Apache Software Foundation (ASF) under one\nor more contributor license
+    agreements.  See the NOTICE file\ndistributed with this work for additional information\nregarding
+    copyright ownership.  The ASF licenses this file\nto you under the Apache License,
+    Version 2.0 (the\n\"License\"); you may not use this file except in compliance\nwith
+    the License.  You may obtain a copy of the License at\n\n  http://www.apache.org/licenses/LICENSE-2.0\n\nUnless
+    required by applicable law or agreed to in writing,\nsoftware distributed under
+    the License is distributed on an\n\"AS IS\" BASIS, WITHOUT WARRANTIES OR CONDITIONS
+    OF ANY\nKIND, either express or implied.  See the License for the\nspecific language
+    governing permissions and limitations\nunder the License.\n-->\n\n<configuration
+    xmlns=\"urn:activemq\"\n               xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"\n
+    \              xsi:schemaLocation=\"urn:activemq /schema/artemis-configuration.xsd\">\n\n
+    \  <core xmlns=\"urn:activemq:core\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"\n
+    \        xsi:schemaLocation=\"urn:activemq:core \">\n\n      <name>${AMQ_NAME}</name>\n\n
+    \     <persistence-enabled>true</persistence-enabled>\n\n      <!-- this could
+    be ASYNCIO, MAPPED, NIO\n           ASYNCIO: Linux Libaio\n           MAPPED:
+    mmap files\n           NIO: Plain Java Files\n       -->\n      <journal-type>NIO</journal-type>\n\n
+    \     <paging-directory>./data/paging</paging-directory>\n\n      <bindings-directory>./data/bindings</bindings-directory>\n\n
+    \     <journal-directory>./data/journal</journal-directory>\n\n      <large-messages-directory>./data/large-messages</large-messages-directory>\n\n
+    \     <journal-datasync>true</journal-datasync>\n\n      <journal-min-files>2</journal-min-files>\n\n
+    \     <journal-pool-files>10</journal-pool-files>\n\n      <journal-file-size>10M</journal-file-size>\n
+    \     \n      <!--\n       This value was determined through a calculation.\n
+    \      Your system could perform 0.26 writes per millisecond\n       on the current
+    journal configuration.\n       That translates as a sync write every 3800000 nanoseconds.\n\n
+    \      Note: If you specify 0 the system will perform writes directly to the disk.\n
+    \            We recommend this to be 0 if you are using journalType=MAPPED and
+    ournal-datasync=false.\n      -->\n      <journal-buffer-timeout>3800000</journal-buffer-timeout>\n\n\n
+    \     <!--\n        When using ASYNCIO, this will determine the writing queue
+    depth for libaio.\n       -->\n      <journal-max-io>1</journal-max-io>\n      <!--\n
+    \       You can verify the network health of a particular NIC by specifying the
+    <network-check-NIC> element.\n         <network-check-NIC>theNicName</network-check-NIC>\n
+    \       -->\n\n      <!--\n        Use this to use an HTTP server to validate
+    the network\n         <network-check-URL-list>http://www.apache.org</network-check-URL-list>
+    -->\n\n      <!-- <network-check-period>10000</network-check-period> -->\n      <!--
+    <network-check-timeout>1000</network-check-timeout> -->\n\n      <!-- this is
+    a comma separated list, no spaces, just DNS or IPs\n           it should accept
+    IPV6\n\n           Warning: Make sure you understand your network topology as
+    this is meant to validate if your network is valid.\n                    Using
+    IPs that could eventually disappear or be partially visible may defeat the purpose.\n
+    \                   You can use a list of multiple IPs, and if any successful
+    ping will make the server OK to continue running -->\n      <!-- <network-check-list>10.0.0.1</network-check-list>
+    -->\n\n      <!-- use this to customize the ping used for ipv4 addresses -->\n
+    \     <!-- <network-check-ping-command>ping -c 1 -t %d %s</network-check-ping-command>
+    -->\n\n      <!-- use this to customize the ping used for ipv6 addresses -->\n
+    \     <!-- <network-check-ping6-command>ping6 -c 1 %2$s</network-check-ping6-command>
+    -->\n\n\n\n\n      <!-- how often we are looking for how many bytes are being
+    used on the disk in ms -->\n      <disk-scan-period>5000</disk-scan-period>\n\n
+    \     <!-- once the disk hits this limit the system will block, or close the connection
+    in certain protocols\n           that won't support flow control. -->\n      <max-disk-usage>90</max-disk-usage>\n\n
+    \     <!-- should the broker detect dead locks and other issues -->\n      <critical-analyzer>true</critical-analyzer>\n\n
+    \     <critical-analyzer-timeout>120000</critical-analyzer-timeout>\n\n      <critical-analyzer-check-period>60000</critical-analyzer-check-period>\n\n
+    \     <critical-analyzer-policy>HALT</critical-analyzer-policy>\n\n      <!--
+    the system will enter into page mode once you hit this limit.\n           This
+    is an estimate in bytes of how much the messages are using in memory\n\n            The
+    system will use half of the available memory (-Xmx) by default for the global-max-size.\n
+    \           You may specify a different value here if you need to customize it
+    to your needs.\n\n            <global-max-size>${AMQ_STORAGE_USAGE_LIMIT}</global-max-size>\n\n
+    \     -->\n\n      <acceptors>\n\n         <!-- useEpoll means: it will use Netty
+    epoll if you are on a system (Linux) that supports it -->\n         <!-- amqpCredits:
+    The number of credits sent to AMQP producers -->\n         <!-- amqpLowCredits:
+    The server will send the # credits specified at amqpCredits at this low mark -->\n\n
+    \        <!-- Acceptor for every supported protocol -->\n         <acceptor name=\"artemis\">tcp://${BROKER_IP}:61616?tcpSendBufferSize=1048576;tcpReceiveBufferSize=1048576;protocols=CORE,AMQP,STOMP,HORNETQ,MQTT,OPENWIRE;useEpoll=true;amqpCredits=1000;amqpLowCredits=300</acceptor>\n\n
+    \        <!-- AMQP Acceptor.  Listens on default AMQP port for AMQP traffic.-->\n
+    \        <acceptor name=\"amqp\">tcp://${BROKER_IP}:5672?tcpSendBufferSize=1048576;tcpReceiveBufferSize=1048576;protocols=AMQP;useEpoll=true;amqpCredits=1000;amqpMinCredits=300</acceptor>\n\n
+    \        <!-- STOMP Acceptor. -->\n         <acceptor name=\"stomp\">tcp://${BROKER_IP}:61613?tcpSendBufferSize=1048576;tcpReceiveBufferSize=1048576;protocols=STOMP;useEpoll=true</acceptor>\n\n
+    \        <!-- HornetQ Compatibility Acceptor.  Enables HornetQ Core and STOMP
+    for legacy HornetQ clients. -->\n         <acceptor name=\"hornetq\">tcp://${BROKER_IP}:5445?protocols=HORNETQ,STOMP;useEpoll=true</acceptor>\n\n
+    \        <!-- MQTT Acceptor -->\n         <acceptor name=\"mqtt\">tcp://${BROKER_IP}:1883?tcpSendBufferSize=1048576;tcpReceiveBufferSize=1048576;protocols=MQTT;useEpoll=true</acceptor>\n\n
+    \     </acceptors>\n\n\n      <security-settings>\n         <security-setting
+    match=\"#\">\n            <permission type=\"createNonDurableQueue\" roles=\"${AMQ_ROLE}\"/>\n
+    \           <permission type=\"deleteNonDurableQueue\" roles=\"${AMQ_ROLE}\"/>\n
+    \           <permission type=\"createDurableQueue\" roles=\"${AMQ_ROLE}\"/>\n
+    \           <permission type=\"deleteDurableQueue\" roles=\"${AMQ_ROLE}\"/>\n
+    \           <permission type=\"createAddress\" roles=\"${AMQ_ROLE}\"/>\n            <permission
+    type=\"deleteAddress\" roles=\"${AMQ_ROLE}\"/>\n            <permission type=\"consume\"
+    roles=\"${AMQ_ROLE}\"/>\n            <permission type=\"browse\" roles=\"${AMQ_ROLE}\"/>\n
+    \           <permission type=\"send\" roles=\"${AMQ_ROLE}\"/>\n            <!--
+    we need this otherwise ./artemis data imp wouldn't work -->\n            <permission
+    type=\"manage\" roles=\"${AMQ_ROLE}\"/>\n         </security-setting>\n      </security-settings>\n\n
+    \     <address-settings>\n         <!-- if you define auto-create on certain queues,
+    management has to be auto-create -->\n         <address-setting match=\"activemq.management#\">\n
+    \           <dead-letter-address>DLQ</dead-letter-address>\n            <expiry-address>ExpiryQueue</expiry-address>\n
+    \           <redelivery-delay>0</redelivery-delay>\n            <!-- with -1 only
+    the global-max-size is in use for limiting -->\n            <max-size-bytes>-1</max-size-bytes>\n
+    \           <message-counter-history-day-limit>10</message-counter-history-day-limit>\n
+    \           <address-full-policy>PAGE</address-full-policy>\n            <auto-create-queues>true</auto-create-queues>\n
+    \           <auto-create-addresses>true</auto-create-addresses>\n            <auto-create-jms-queues>true</auto-create-jms-queues>\n
+    \           <auto-create-jms-topics>true</auto-create-jms-topics>\n         </address-setting>\n
+    \        <!--default for catch all-->\n         <address-setting match=\"#\">\n
+    \           <dead-letter-address>DLQ</dead-letter-address>\n            <expiry-address>ExpiryQueue</expiry-address>\n
+    \           <redelivery-delay>0</redelivery-delay>\n            <!-- with -1 only
+    the global-max-size is in use for limiting -->\n            <max-size-bytes>-1</max-size-bytes>\n
+    \           <message-counter-history-day-limit>10</message-counter-history-day-limit>\n
+    \           <address-full-policy>PAGE</address-full-policy>\n            <auto-create-queues>true</auto-create-queues>\n
+    \           <auto-create-addresses>true</auto-create-addresses>\n            <auto-create-jms-queues>true</auto-create-jms-queues>\n
+    \           <auto-create-jms-topics>true</auto-create-jms-topics>\n         </address-setting>\n
+    \     </address-settings>\n\n      <addresses>\n         <address name=\"DLQ\">\n
+    \           <anycast>\n               <queue name=\"DLQ\" />\n            </anycast>\n
+    \        </address>\n         <address name=\"ExpiryQueue\">\n            <anycast>\n
+    \              <queue name=\"ExpiryQueue\" />\n            </anycast>\n         </address>\n\n
+    \     </addresses>\n\n   </core>\n</configuration>"
+- description: The logging.properties configuration file.
+  displayName: logging.properties
+  name: LOGGING_PROPERTIES
+  value: "<!-- Remove this tag to enable custom configuration --> \n#\n# Licensed
+    to the Apache Software Foundation (ASF) under one or more\n# contributor license
+    agreements. See the NOTICE file distributed with\n# this work for additional information
+    regarding copyright ownership.\n# The ASF licenses this file to You under the
+    Apache License, Version 2.0\n# (the \"License\"); you may not use this file except
+    in compliance with\n# the License. You may obtain a copy of the License at\n#\n#
+    \    http://www.apache.org/licenses/LICENSE-2.0\n#\n# Unless required by applicable
+    law or agreed to in writing, software\n# distributed under the License is distributed
+    on an \"AS IS\" BASIS,\n# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
+    express or implied.\n# See the License for the specific language governing permissions
+    and\n# limitations under the License.\n#\n\n# Additional logger names to configure
+    (root logger is always configured)\n# Root logger option\nloggers=org.eclipse.jetty,org.jboss.logging,org.apache.activemq.artemis.core.server,org.apache.activemq.artemis.utils,org.apache.activemq.artemis.journal,org.apache.activemq.artemis.jms.server,org.apache.activemq.artemis.integration.bootstrap\n\n#
+    Root logger level\nlogger.level=INFO\n# ActiveMQ Artemis logger levels\nlogger.org.apache.activemq.artemis.core.server.level=INFO\nlogger.org.apache.activemq.artemis.journal.level=INFO\nlogger.org.apache.activemq.artemis.utils.level=INFO\nlogger.org.apache.activemq.artemis.jms.level=INFO\nlogger.org.apache.activemq.artemis.integration.bootstrap.level=INFO\nlogger.org.eclipse.jetty.level=WARN\n#
+    Root logger handlers\nlogger.handlers=CONSOLE\n\n# Console handler configuration\nhandler.CONSOLE=org.jboss.logmanager.handlers.ConsoleHandler\nhandler.CONSOLE.properties=autoFlush\nhandler.CONSOLE.level=DEBUG\nhandler.CONSOLE.autoFlush=true\nhandler.CONSOLE.formatter=PATTERN\n\n#
+    File handler configuration\nhandler.FILE=org.jboss.logmanager.handlers.PeriodicRotatingFileHandler\nhandler.FILE.level=DEBUG\nhandler.FILE.properties=suffix,append,autoFlush,fileName\nhandler.FILE.suffix=.yyyy-MM-dd\nhandler.FILE.append=true\nhandler.FILE.autoFlush=true\nhandler.FILE.fileName=${artemis.instance}/log/artemis.log\nhandler.FILE.formatter=PATTERN\n\n#
+    Formatter pattern configuration\nformatter.PATTERN=org.jboss.logmanager.formatters.PatternFormatter\nformatter.PATTERN.properties=pattern\nformatter.PATTERN.pattern=%d
+    %-5p [%c] %s%E%n"
